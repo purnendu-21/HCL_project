@@ -1,0 +1,629 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Steganography Tool</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background: #101827;
+    color: white;
+    min-height: 100vh;
+    padding: 30px 15px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+header h1 {
+    color: #38bdf8;
+    margin-bottom: 10px;
+}
+
+header p {
+    color: #cbd5e1;
+}
+
+.container {
+    max-width: 1000px;
+    margin: auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+}
+
+.card {
+    background: #1e293b;
+    padding: 25px;
+    border-radius: 14px;
+    border: 1px solid #334155;
+}
+
+.card h2 {
+    color: #38bdf8;
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin: 15px 0 8px;
+}
+
+input[type="file"], textarea {
+    width: 100%;
+    padding: 12px;
+    background: #0f172a;
+    color: white;
+    border: 1px solid #475569;
+    border-radius: 8px;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 110px;
+}
+
+button {
+    width: 100%;
+    padding: 13px;
+    margin-top: 18px;
+    background: #0284c7;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #0369a1;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.result {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #86efac;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.preview {
+    width: 100%;
+    margin-top: 15px;
+    border-radius: 8px;
+    display: none;
+}
+
+.details {
+    margin-top: 15px;
+    padding: 15px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    display: none;
+}
+
+.details h3 {
+    color: #38bdf8;
+    margin-bottom: 12px;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid #334155;
+    font-size: 14px;
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-row span:first-child {
+    color: #94a3b8;
+}
+
+.detail-row span:last-child {
+    color: #86efac;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+footer {
+    text-align: center;
+    color: #94a3b8;
+    margin-top: 30px;
+}
+
+@media(max-width: 650px) {
+    .container {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>🔐 Image Steganography Tool</h1>
+    <p>Hide and extract secret messages inside images using LSB Algorithm</p>
+</header>
+
+<main class="container">
+
+<section class="card">
+
+<h2>1. Hide Secret Message</h2>
+
+<label>Select PNG Image</label>
+<input type="file" id="encodeImage" accept="image/png">
+
+<div id="originalDetails" class="details">
+    <h3>📷 Original Image Details</h3>
+    <div id="originalInfo"></div>
+</div>
+
+<label>Enter Secret Message</label>
+<textarea id="secretMessage"
+placeholder="Enter your secret message..."></textarea>
+
+<button id="encodeButton">Encode Message</button>
+
+<div id="encodeResult" class="result">
+Waiting for input...
+</div>
+
+<img id="encodedPreview" class="preview"
+alt="Encoded image preview">
+
+<div id="encodedDetails" class="details">
+    <h3>🔍 Encoded Image Details</h3>
+    <div id="encodedInfo"></div>
+</div>
+
+<button id="downloadButton" disabled>
+Download Encoded Image
+</button>
+
+</section>
+
+<section class="card">
+
+<h2>2. Extract Secret Message</h2>
+
+<label>Select Encoded PNG Image</label>
+<input type="file" id="decodeImage" accept="image/png">
+
+<button id="decodeButton">Decode Message</button>
+
+<div id="decodeResult" class="result">
+Extracted message will appear here.
+</div>
+
+<img id="decodePreview" class="preview"
+alt="Decoded image preview">
+
+<div id="decodedDetails" class="details">
+    <h3>📋 Decoded Image Details</h3>
+    <div id="decodedInfo"></div>
+</div>
+
+</section>
+
+</main>
+
+<footer>
+<p>College Project | Image Steganography using LSB Algorithm</p>
+</footer>
+
+<script>
+
+const MAGIC = [83, 84, 71, 49]; // STG1
+
+let encodedURL = null;
+
+// Convert bytes to binary bits
+function bytesToBits(bytes) {
+    const bits = [];
+
+    for (const byte of bytes) {
+        for (let i = 7; i >= 0; i--) {
+            bits.push((byte >> i) & 1);
+        }
+    }
+
+    return bits;
+}
+
+// Convert bits to bytes
+function bitsToBytes(bits) {
+    const bytes = new Uint8Array(bits.length / 8);
+
+    for (let i = 0; i < bytes.length; i++) {
+        let value = 0;
+
+        for (let j = 0; j < 8; j++) {
+            value = (value << 1) | bits[i * 8 + j];
+        }
+
+        bytes[i] = value;
+    }
+
+    return bytes;
+}
+
+// Load image safely
+function loadImage(file) {
+    return new Promise((resolve, reject) => {
+
+        if (!file) {
+            reject(new Error("Please select an image."));
+            return;
+        }
+
+        if (!file.type.startsWith("image/")) {
+            reject(new Error("Selected file is not an image."));
+            return;
+        }
+
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+
+        img.onload = () => {
+            try {
+                const canvas = document.createElement("canvas");
+
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+
+                const ctx = canvas.getContext("2d", {
+                    willReadFrequently: true
+                });
+
+                if (!ctx) {
+                    throw new Error("Canvas context unavailable.");
+                }
+
+                ctx.drawImage(img, 0, 0);
+
+                const imageData = ctx.getImageData(
+                    0, 0,
+                    canvas.width,
+                    canvas.height
+                );
+
+                URL.revokeObjectURL(url);
+
+                resolve({
+                    canvas,
+                    ctx,
+                    imageData,
+                    image: img
+                });
+
+            } catch (error) {
+                URL.revokeObjectURL(url);
+                reject(error);
+            }
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Image loading failed."));
+        };
+
+        img.src = url;
+    });
+}
+
+// Get RGB pixel channel positions
+function getPositions(data) {
+    const positions = [];
+
+    for (let i = 0; i < data.length; i += 4) {
+        positions.push(i, i + 1, i + 2);
+    }
+
+    return positions;
+}
+
+// Display details
+function showDetails(elementId, infoId, file, image, extra = {}) {
+
+    const details = document.getElementById(elementId);
+    const info = document.getElementById(infoId);
+
+    const rows = {
+        "Image Name": file.name,
+        "Image Format": "PNG",
+        "Image Width": image.width + " pixels",
+        "Image Height": image.height + " pixels",
+        "Total Pixels": (image.width * image.height).toLocaleString(),
+        "File Size": (file.size / 1024).toFixed(2) + " KB",
+        "Algorithm": "LSB",
+        ...extra
+    };
+
+    info.replaceChildren();
+
+    for (const [key, value] of Object.entries(rows)) {
+
+        const row = document.createElement("div");
+        row.className = "detail-row";
+
+        const label = document.createElement("span");
+        label.textContent = key;
+
+        const result = document.createElement("span");
+        result.textContent = value;
+
+        row.append(label, result);
+        info.appendChild(row);
+    }
+
+    details.style.display = "block";
+}
+
+// Encoding function
+async function encodeMessage() {
+
+    const file = document.getElementById("encodeImage").files[0];
+    const message = document.getElementById("secretMessage").value;
+
+    const result = document.getElementById("encodeResult");
+    const preview = document.getElementById("encodedPreview");
+    const download = document.getElementById("downloadButton");
+
+    result.textContent = "Encoding...";
+
+    download.disabled = true;
+    preview.style.display = "none";
+
+    document.getElementById("encodedDetails").style.display = "none";
+
+    try {
+
+        if (!file) {
+            throw new Error("Please select a PNG image.");
+        }
+
+        if (file.type !== "image/png") {
+            throw new Error("Please upload a PNG image.");
+        }
+
+        if (!message.trim()) {
+            throw new Error("Please enter a message.");
+        }
+
+        const {canvas, ctx, imageData, image} =
+            await loadImage(file);
+
+        const messageBytes = new TextEncoder().encode(message);
+
+        const pixels = imageData.data;
+        const positions = getPositions(pixels);
+
+        // Header: 4-byte signature + 4-byte length
+        const header = new Uint8Array(8);
+
+        header.set(MAGIC);
+
+        const view = new DataView(header.buffer);
+        view.setUint32(4, messageBytes.length, false);
+
+        // Combine header and message
+        const payload = new Uint8Array(
+            header.length + messageBytes.length
+        );
+
+        payload.set(header);
+        payload.set(messageBytes, 8);
+
+        const bits = bytesToBits(payload);
+
+        if (bits.length > positions.length) {
+            throw new Error(
+                "Message too large! Please select a larger PNG image."
+            );
+        }
+
+        // Embed bits into RGB channels
+        for (let i = 0; i < bits.length; i++) {
+
+            const index = positions[i];
+
+            pixels[index] =
+                (pixels[index] & 254) | bits[i];
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // Create PNG
+        const blob = await new Promise(resolve => {
+            canvas.toBlob(resolve, "image/png");
+        });
+
+        if (!blob) {
+            throw new Error("PNG creation failed.");
+        }
+
+        if (encodedURL) {
+            URL.revokeObjectURL(encodedURL);
+        }
+
+        encodedURL = URL.createObjectURL(blob);
+
+        preview.src = encodedURL;
+        preview.style.display = "block";
+
+        download.disabled = false;
+
+        download.onclick = () => {
+
+            const link = document.createElement("a");
+            link.href = encodedURL;
+            link.download = "encoded_image.png";
+            link.click();
+        };
+
+        showDetails(
+            "encodedDetails",
+            "encodedInfo",
+            {name: "encoded_image.png", size: blob.size},
+            image,
+            {
+                "Message Size": messageBytes.length + " bytes",
+                "Encoding Status": "Successfully Encoded"
+            }
+        );
+
+        result.textContent =
+            "SUCCESS! Message encoded successfully.";
+
+    } catch (error) {
+
+        result.textContent = "Encoding Error: " + error.message;
+
+        console.error("Encoding error:", error);
+    }
+}
+
+// Decoding function
+async function decodeMessage() {
+
+    const file = document.getElementById("decodeImage").files[0];
+
+    const result = document.getElementById("decodeResult");
+    const preview = document.getElementById("decodePreview");
+
+    result.textContent = "Decoding...";
+
+    preview.style.display = "none";
+
+    document.getElementById("decodedDetails").style.display = "none";
+
+    try {
+
+        if (!file) {
+            throw new Error("Please select an encoded PNG image.");
+        }
+
+        if (file.type !== "image/png") {
+            throw new Error("Please upload an encoded PNG image.");
+        }
+
+        const {canvas, imageData, image} =
+            await loadImage(file);
+
+        const pixels = imageData.data;
+        const positions = getPositions(pixels);
+
+        if (positions.length < 64) {
+            throw new Error("Image is too small.");
+        }
+
+        // Read first 64 bits (8-byte header)
+        const headerBits = [];
+
+        for (let i = 0; i < 64; i++) {
+            headerBits.push(pixels[positions[i]] & 1);
+        }
+
+        const header = bitsToBytes(headerBits);
+
+        // Verify signature
+        for (let i = 0; i < 4; i++) {
+            if (header[i] !== MAGIC[i]) {
+                throw new Error(
+                    "Invalid signature. Select the image generated by Encode Message."
+                );
+            }
+        }
+
+        // Read message length
+        const length = new DataView(
+            header.buffer
+        ).getUint32(4, false);
+
+        const availableBytes = Math.floor(
+            (positions.length - 64) / 8
+        );
+
+        if (length === 0 || length > availableBytes) {
+            throw new Error("Invalid message length.");
+        }
+
+        // Read message bits
+        const messageBits = [];
+
+        for (let i = 0; i < length * 8; i++) {
+
+            messageBits.push(
+                pixels[positions[64 + i]] & 1
+            );
+        }
+
+        const messageBytes = bitsToBytes(messageBits);
+
+        const message = new TextDecoder("utf-8", {
+            fatal: true
+        }).decode(messageBytes);
+
+        result.textContent =
+            "SUCCESS! Hidden Message:\n\n" + message;
+
+        preview.src = canvas.toDataURL("image/png");
+        preview.style.display = "block";
+
+        showDetails(
+            "decodedDetails",
+            "decodedInfo",
+            file,
+            image,
+            {
+                "Message Size": length + " bytes",
+                "Decoding Status": "Successfully Decoded"
+            }
+        );
+
+    } catch (error) {
+
+        result.textContent = "Decoding Error: " + error.message;
+
+        console.error("Decoding error:", error);
+    }
+}
+
+// Button events
+document.getElementById("encodeButton")
+.addEventListener("click", encodeMessage);
+
+document.getElementById("decodeButton")
+.addEventListener("click", decodeMessage);
+</script>
+
+
+</body>
+</html>
